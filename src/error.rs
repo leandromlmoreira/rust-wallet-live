@@ -14,6 +14,8 @@ pub enum AppError {
     UserDoesNotExist,
     #[error("This username is already registered")]
     UsernameTaken,
+    #[error("{0}")]
+    Validation(String),
     #[error(transparent)]
     Database(#[from] sqlx::Error),
     #[error(transparent)]
@@ -37,6 +39,7 @@ impl IntoResponse for AppError {
             Self::UsernameTaken | Self::MissingAuthorization => StatusCode::BAD_REQUEST,
             Self::InvalidCredentials => StatusCode::UNAUTHORIZED,
             Self::AssetDoesNotExist | Self::UserDoesNotExist => StatusCode::NOT_FOUND,
+            Self::Validation(_) => StatusCode::UNPROCESSABLE_ENTITY,
             Self::Database(_) | Self::Template(_) | Self::Jwt(_) => {
                 StatusCode::INTERNAL_SERVER_ERROR
             }

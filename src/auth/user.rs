@@ -11,7 +11,10 @@ use serde::{Deserialize, Serialize};
 
 use crate::{app::AppState, error::AppError, repository::Repository};
 
-const SECRET_KEY: &[u8] = b"im-so-secret";
+/// Nome do cookie que guarda o JWT da sessão.
+pub const TOKEN_COOKIE: &str = "token";
+/// Validade da sessão.
+pub const SESSION_HOURS: u64 = 8;
 
 pub struct UnauthenticatedUser {
     username: String,
@@ -32,7 +35,8 @@ impl UnauthenticatedUser {
         match password_auth::verify_password(&self.password, &user_record.password_hash) {
             Ok(()) => Ok(User::new(user_record.id, user_record.username)),
             Err(VerifyError::PasswordInvalid) => Err(AppError::InvalidCredentials),
-            Err(VerifyError::Parse(err)) => panic!("Hashing algorithm failed: {err}"),
+            // Um hash corrompido não deve derrubar o servidor: tratamos como credencial inválida.
+            Err(VerifyError::Parse(_)) => Err(AppError::InvalidCredentials),
         }
     }
 
@@ -68,15 +72,16 @@ impl User {
         self.id
     }
 
-    pub fn auth_token(self) -> Result<String, AppError> {
-        let key = HS256Key::from_bytes(SECRET_KEY);
-        let claims = Claims::with_custom_claims(UserClaims::from(self), Duration::from_mins(10));
+    pub fn auth_token(self, secret: &[u8]) -> Result<String, AppError> {
+        let key = HS256Key::from_bytes(secret);
+        let claims =
+            Claims::with_custom_claims(UserClaims::from(self), Duration::from_hours(SESSION_HOURS));
         let token = key.authenticate(claims)?;
         Ok(token)
     }
 
-    pub fn from_auth_token(token: &str) -> Result<Self, AppError> {
-        let key = HS256Key::from_bytes(SECRET_KEY);
+    pub fn from_auth_token(token: &str, secret: &[u8]) -> Result<Self, AppError> {
+        let key = HS256Key::from_bytes(secret);
         let claims: UserClaims = key.verify_token(token, None)?.custom;
         Ok(Self::new(claims.id, claims.username))
     }
@@ -87,16 +92,16 @@ impl FromRequestParts<AppState> for User {
 
     async fn from_request_parts(
         parts: &mut axum::http::request::Parts,
-        _state: &AppState,
+        state: &AppState,
     ) -> Result<Self, Self::Rejection> {
         let jar = CookieJar::from_headers(&parts.headers);
 
-        let token = match jar.get("token") {
+        let token = match jar.get(TOKEN_COOKIE) {
             Some(token) => token.value(),
             None => return Err(AppError::MissingAuthorization),
         };
 
-        User::from_auth_token(token)
+        User::from_auth_token(token, &state.config.jwt_secret)
     }
 }
 
@@ -120,5 +125,30 @@ struct UserClaims {
 impl From<User> for UserClaims {
     fn from(User { id, username }: User) -> Self {
         Self { id, username }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const SECRET: &[u8] = b"test-secret-with-enough-bytes";
+
+    #[test]
+    fn token_round_trip_keeps_identity() {
+        let token = User::new(7, "ana".to_string()).auth_token(SECRET).unwrap();
+        let user = User::from_auth_token(&token, SECRET).unwrap();
+
+        assert_eq!(user.id(), 7);
+        assert_eq!(user.username(), "ana");
+    }
+
+    #[test]
+    fn token_signed_with_another_secret_is_rejected() {
+        let token = User::new(7, "ana".to_string())
+            .auth_token(b"another-secret-entirely")
+            .unwrap();
+
+        assert!(User::from_auth_token(&token, SECRET).is_err());
     }
 }

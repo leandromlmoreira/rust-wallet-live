@@ -2,14 +2,22 @@ use axum::{Json, Router, routing::get};
 use serde::Deserialize;
 
 use crate::{
-    app::AppState, auth::admin::Admin, error::AppError, models::Asset, repository::Repository,
+    app::AppState,
+    auth::{admin::Admin, user::User},
+    error::AppError,
+    models::Asset,
+    portfolio::{self, PortfolioSummary},
+    repository::Repository,
+    validation,
 };
 
 pub fn router() -> Router<AppState> {
-    Router::new().route(
-        "/assets",
-        get(list_assets).post(create_asset).patch(update_asset),
-    )
+    Router::new()
+        .route(
+            "/assets",
+            get(list_assets).post(create_asset).patch(update_asset),
+        )
+        .route("/portfolio", get(portfolio_summary))
 }
 
 #[tracing::instrument(skip_all)]
@@ -30,9 +38,18 @@ async fn create_asset(
     repostiory: Repository,
     Json(request): Json<CreateAssetRequest>,
 ) -> Result<Json<Asset>, AppError> {
+    validation::validate_asset_name(&request.name)?;
+    validation::validate_unit_value(request.unit_value)?;
+
     let new_asset = repostiory
-        .create_asset(request.name, request.unit_value)
-        .await?;
+        .create_asset(request.name.trim().to_string(), request.unit_value)
+        .await
+        .map_err(|err| match err {
+            sqlx::Error::Database(db_err) if db_err.is_unique_violation() => {
+                AppError::Validation("Já existe um ativo com esse nome".to_string())
+            }
+            other => AppError::Database(other),
+        })?;
 
     Ok(Json(new_asset))
 }
@@ -50,13 +67,31 @@ async fn update_asset(
     repostiory: Repository,
     Json(request): Json<UpdateAssetRequest>,
 ) -> Result<Json<Asset>, AppError> {
+    if let Some(name) = &request.name {
+        validation::validate_asset_name(name)?;
+    }
+    if let Some(unit_value) = request.unit_value {
+        validation::validate_unit_value(unit_value)?;
+    }
+
+    let name = request.name.map(|name| name.trim().to_string());
     match repostiory
-        .update_asset(request.id, request.name, request.unit_value)
+        .update_asset(request.id, name, request.unit_value)
         .await?
     {
         Some(updated_asset) => Ok(Json(updated_asset)),
         None => Err(AppError::AssetDoesNotExist),
     }
+}
+
+/// Resumo da carteira da pessoa autenticada (cookie de sessão).
+#[tracing::instrument(skip_all)]
+async fn portfolio_summary(
+    user: User,
+    repository: Repository,
+) -> Result<Json<PortfolioSummary>, AppError> {
+    let rows = repository.list_positions(user.id()).await?;
+    Ok(Json(portfolio::summarize(rows)))
 }
 
 #[cfg(test)]
@@ -80,6 +115,28 @@ mod tests {
         assert_eq!(new_asset.unit_value, 10.0);
 
         insta::assert_json_snapshot!(new_asset);
+    }
+
+    #[sqlx::test]
+    async fn test_create_asset_rejects_invalid_values(db: PgPool) {
+        let request = CreateAssetRequest {
+            name: "  ".to_string(),
+            unit_value: -5.0,
+        };
+        let result = create_asset(Admin, db.into(), Json(request)).await;
+
+        assert!(matches!(result, Err(AppError::Validation(_))));
+    }
+
+    #[sqlx::test(fixtures("bitcoin_asset"))]
+    async fn test_create_asset_rejects_duplicated_name(db: PgPool) {
+        let request = CreateAssetRequest {
+            name: "Bitcoin".to_string(),
+            unit_value: 1.0,
+        };
+        let result = create_asset(Admin, db.into(), Json(request)).await;
+
+        assert!(matches!(result, Err(AppError::Validation(_))));
     }
 
     #[sqlx::test(fixtures("bitcoin_asset"))]
@@ -109,5 +166,17 @@ mod tests {
         assert_eq!(updated_asset.unit_value, 20.0);
 
         insta::assert_json_snapshot!(updated_asset);
+    }
+
+    #[sqlx::test]
+    async fn test_update_missing_asset(db: PgPool) {
+        let request = UpdateAssetRequest {
+            id: 42,
+            name: None,
+            unit_value: Some(1.0),
+        };
+        let result = update_asset(Admin, db.into(), Json(request)).await;
+
+        assert!(matches!(result, Err(AppError::AssetDoesNotExist)));
     }
 }
