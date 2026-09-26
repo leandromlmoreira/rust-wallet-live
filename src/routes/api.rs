@@ -1,12 +1,12 @@
 use axum::{Json, Router, routing::get};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use crate::{
     app::AppState,
     auth::{admin::Admin, user::User},
     error::AppError,
-    models::Asset,
-    portfolio::{self, PortfolioSummary},
+    models::{Asset, TransactionRow},
+    portfolio::{self, PortfolioSummary, TimelinePoint},
     repository::Repository,
     validation,
 };
@@ -18,6 +18,7 @@ pub fn router() -> Router<AppState> {
             get(list_assets).post(create_asset).patch(update_asset),
         )
         .route("/portfolio", get(portfolio_summary))
+        .route("/transactions", get(transactions))
 }
 
 #[tracing::instrument(skip_all)]
@@ -92,6 +93,27 @@ async fn portfolio_summary(
 ) -> Result<Json<PortfolioSummary>, AppError> {
     let rows = repository.list_positions(user.id()).await?;
     Ok(Json(portfolio::summarize(rows)))
+}
+
+#[derive(Serialize)]
+struct TransactionsResponse {
+    transactions: Vec<TransactionRow>,
+    realized_pnl: f64,
+    invested_timeline: Vec<TimelinePoint>,
+}
+
+/// Histórico de operações, lucro realizado e evolução do capital investido.
+#[tracing::instrument(skip_all)]
+async fn transactions(
+    user: User,
+    repository: Repository,
+) -> Result<Json<TransactionsResponse>, AppError> {
+    let transactions = repository.list_transactions(user.id()).await?;
+    Ok(Json(TransactionsResponse {
+        realized_pnl: portfolio::realized_pnl(&transactions),
+        invested_timeline: portfolio::invested_timeline(&transactions),
+        transactions,
+    }))
 }
 
 #[cfg(test)]

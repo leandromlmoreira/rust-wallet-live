@@ -23,6 +23,28 @@ pub fn brl(value: f64) -> String {
     )
 }
 
+/// Rótulo curto para eixos: `R$ 0`, `R$ 750`, `R$ 2,5 mil`, `R$ 40 mil`, `R$ 1,2 mi`.
+pub fn brl_compact(value: f64) -> String {
+    let (scaled, suffix) = if value.abs() >= 1_000_000.0 {
+        (value / 1_000_000.0, " mi")
+    } else if value.abs() >= 1_000.0 {
+        (value / 1_000.0, " mil")
+    } else {
+        (value, "")
+    };
+    let text = if (scaled - scaled.round()).abs() < 0.05 {
+        format!("{}", scaled.round() as i64)
+    } else {
+        format!("{scaled:.1}").replace('.', ",")
+    };
+    format!("R$ {text}{suffix}")
+}
+
+/// `32.894` -> `32,9%`
+pub fn percent(value: f64) -> String {
+    format!("{value:.1}%").replace('.', ",")
+}
+
 /// `12.345` -> `+12,35%`
 pub fn signed_percent(value: f64) -> String {
     let rounded = (value * 100.0).round() / 100.0;
@@ -60,6 +82,16 @@ mod tests {
         assert_eq!(brl(1_000_000.0), "R$ 1.000.000,00");
         assert_eq!(brl(-42.199), "-R$ 42,20");
         assert_eq!(brl(-0.001), "R$ 0,00");
+    }
+
+    #[test]
+    fn formats_compact_axis_labels() {
+        assert_eq!(brl_compact(0.0), "R$ 0");
+        assert_eq!(brl_compact(750.0), "R$ 750");
+        assert_eq!(brl_compact(2_500.0), "R$ 2,5 mil");
+        assert_eq!(brl_compact(40_000.0), "R$ 40 mil");
+        assert_eq!(brl_compact(1_200_000.0), "R$ 1,2 mi");
+        assert_eq!(percent(32.894), "32,9%");
     }
 
     #[test]

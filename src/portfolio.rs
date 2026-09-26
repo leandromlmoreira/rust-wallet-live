@@ -2,7 +2,7 @@
 
 use serde::Serialize;
 
-use crate::models::PositionRow;
+use crate::models::{PositionRow, TransactionRow};
 
 #[derive(Serialize, Debug, PartialEq)]
 pub struct HoldingSummary {
@@ -17,6 +17,8 @@ pub struct HoldingSummary {
     pub pnl: f64,
     pub pnl_pct: f64,
     pub allocation_pct: f64,
+    /// Posição do ativo na ordem de abertura: a cor segue o ativo, não o ranking.
+    pub color_slot: usize,
 }
 
 #[derive(Serialize, Debug, PartialEq)]
@@ -43,7 +45,8 @@ pub fn summarize(rows: Vec<PositionRow>) -> PortfolioSummary {
 
     let mut holdings: Vec<HoldingSummary> = rows
         .into_iter()
-        .map(|row| {
+        .enumerate()
+        .map(|(color_slot, row)| {
             let invested = row.quantity * row.avg_price;
             let holding_value = row.quantity * row.unit_value;
             HoldingSummary {
@@ -58,6 +61,7 @@ pub fn summarize(rows: Vec<PositionRow>) -> PortfolioSummary {
                 pnl: holding_value - invested,
                 pnl_pct: percent_of(holding_value - invested, invested),
                 allocation_pct: percent_of(holding_value, market_value),
+                color_slot,
             }
         })
         .collect();
@@ -71,6 +75,52 @@ pub fn summarize(rows: Vec<PositionRow>) -> PortfolioSummary {
         pnl: market_value - total_invested,
         pnl_pct: percent_of(market_value - total_invested, total_invested),
     }
+}
+
+/// Lucro (ou prejuízo) já realizado nas vendas: quantidade x (preço de venda - preço médio).
+pub fn realized_pnl(transactions: &[TransactionRow]) -> f64 {
+    transactions
+        .iter()
+        .filter(|t| t.kind == "sell")
+        .map(|t| t.quantity * (t.price - t.cost_basis))
+        .sum()
+}
+
+/// Capital investido ao fim de cada dia com operações.
+/// Compras somam `quantidade x preço`; vendas retiram `quantidade x preço médio`.
+#[derive(Serialize, Debug, PartialEq, Clone)]
+pub struct TimelinePoint {
+    /// Data no formato `AAAA-MM-DD`.
+    pub date: String,
+    pub invested: f64,
+}
+
+pub fn invested_timeline(transactions: &[TransactionRow]) -> Vec<TimelinePoint> {
+    let mut sorted: Vec<&TransactionRow> = transactions.iter().collect();
+    sorted.sort_by(|a, b| a.executed_on.cmp(&b.executed_on).then(a.id.cmp(&b.id)));
+
+    let mut points: Vec<TimelinePoint> = Vec::new();
+    let mut invested = 0.0;
+    for t in sorted {
+        let delta = t.quantity
+            * if t.kind == "sell" {
+                t.cost_basis
+            } else {
+                t.price
+            };
+        invested += if t.kind == "sell" { -delta } else { delta };
+        // Evita "-0,00" por arredondamento de ponto flutuante.
+        let value = if invested.abs() < 1e-6 { 0.0 } else { invested };
+
+        match points.last_mut() {
+            Some(last) if last.date == t.executed_on => last.invested = value,
+            _ => points.push(TimelinePoint {
+                date: t.executed_on.clone(),
+                invested: value,
+            }),
+        }
+    }
+    points
 }
 
 #[cfg(test)]
@@ -129,6 +179,72 @@ mod tests {
         ]);
         let total: f64 = summary.holdings.iter().map(|h| h.allocation_pct).sum();
         assert!((total - 100.0).abs() < 1e-9);
+    }
+
+    fn tx(
+        id: i64,
+        kind: &str,
+        quantity: f64,
+        price: f64,
+        cost_basis: f64,
+        day: &str,
+    ) -> TransactionRow {
+        TransactionRow {
+            id,
+            asset_id: 1,
+            asset_name: "PETR4".to_string(),
+            kind: kind.to_string(),
+            quantity,
+            price,
+            cost_basis,
+            executed_on: day.to_string(),
+        }
+    }
+
+    #[test]
+    fn colors_follow_opening_order_not_ranking() {
+        let summary = summarize(vec![
+            row(1, "Pequeno", 1.0, 1.0, 1.0),
+            row(2, "Grande", 1.0, 1.0, 100.0),
+        ]);
+        assert_eq!(summary.holdings[0].asset_name, "Grande");
+        assert_eq!(summary.holdings[0].color_slot, 1);
+        assert_eq!(summary.holdings[1].color_slot, 0);
+    }
+
+    #[test]
+    fn realized_pnl_only_counts_sales() {
+        let history = vec![
+            tx(1, "buy", 10.0, 20.0, 20.0, "2026-01-02"),
+            tx(2, "sell", 4.0, 25.0, 20.0, "2026-02-02"),
+            tx(3, "sell", 2.0, 15.0, 20.0, "2026-03-02"),
+        ];
+        // 4 x (25 - 20) + 2 x (15 - 20) = 20 - 10
+        assert_eq!(realized_pnl(&history), 10.0);
+    }
+
+    #[test]
+    fn timeline_accumulates_per_day_and_removes_cost_on_sale() {
+        let history = vec![
+            tx(3, "sell", 5.0, 30.0, 20.0, "2026-03-01"),
+            tx(1, "buy", 10.0, 20.0, 20.0, "2026-01-10"),
+            tx(2, "buy", 5.0, 10.0, 10.0, "2026-01-10"),
+        ];
+        let timeline = invested_timeline(&history);
+
+        assert_eq!(
+            timeline,
+            vec![
+                TimelinePoint {
+                    date: "2026-01-10".to_string(),
+                    invested: 250.0
+                },
+                TimelinePoint {
+                    date: "2026-03-01".to_string(),
+                    invested: 150.0
+                },
+            ]
+        );
     }
 
     #[test]

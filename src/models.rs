@@ -22,6 +22,22 @@ pub struct Position {
     pub avg_price: f64,
 }
 
+/// Uma compra ou venda registrada, com o nome do ativo.
+#[derive(Serialize, Clone, Debug, PartialEq)]
+pub struct TransactionRow {
+    pub id: i64,
+    pub asset_id: i64,
+    pub asset_name: String,
+    /// `buy` ou `sell`.
+    pub kind: String,
+    pub quantity: f64,
+    pub price: f64,
+    /// Preço médio da posição no momento da operação.
+    pub cost_basis: f64,
+    /// Data no formato `AAAA-MM-DD`.
+    pub executed_on: String,
+}
+
 /// Posição de uma pessoa usuária já combinada com a cotação atual do ativo.
 #[derive(Clone, Debug)]
 pub struct PositionRow {

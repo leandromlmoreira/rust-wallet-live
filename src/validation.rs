@@ -1,6 +1,6 @@
 //! Regras de entrada compartilhadas pela API e pelas páginas.
 
-use crate::error::AppError;
+use crate::{dates, error::AppError};
 
 fn invalid(message: &str) -> AppError {
     AppError::Validation(message.to_string())
@@ -33,6 +33,18 @@ pub fn validate_price(price: f64) -> Result<(), AppError> {
         return Err(invalid("O preço não pode ser negativo"));
     }
     Ok(())
+}
+
+/// Aceita datas de operação de 1990 até hoje e devolve no formato `AAAA-MM-DD`.
+pub fn validate_trade_date(text: &str) -> Result<String, AppError> {
+    let Some(date) = dates::parse_iso(text) else {
+        return Err(invalid("Informe uma data válida"));
+    };
+    let earliest = dates::parse_iso("1990-01-01").expect("data fixa válida");
+    if date < earliest || date > dates::today() {
+        return Err(invalid("A data da operação não pode estar no futuro"));
+    }
+    Ok(dates::iso(date))
 }
 
 pub fn validate_credentials(username: &str, password: &str) -> Result<(), AppError> {

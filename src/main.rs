@@ -2,6 +2,8 @@ use crate::app::App;
 
 mod app;
 pub mod auth;
+pub mod charts;
+pub mod dates;
 pub mod error;
 pub mod format;
 pub mod models;
