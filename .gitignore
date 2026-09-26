@@ -1,1 +1,6 @@
 /target
+
+# Skills de agentes de IA (instaladas localmente)
+.agents/
+.claude/
+skills-lock.json
