@@ -1,10 +1,10 @@
-# 🦀 Wallet Live — Carteira de Investimentos Inteligente em Rust
+# 🦀 Wallet Live - Carteira de Investimentos Inteligente em Rust
 
 ![CI](../../actions/workflows/ci.yml/badge.svg)
 
 Aplicação **fullstack em Rust** para acompanhar uma carteira de investimentos: API REST, banco PostgreSQL, autenticação com JWT em cookie e dashboard web renderizado no servidor.
 
-Projeto final do **Bootcamp Santander 2026 — Rust AI Developer (DIO)**, construído a partir do [repositório base](https://github.com/digitalinnovationone/rust-fullstack-carteira-investimentos) e evoluído com uma carteira completa por pessoa usuária.
+Projeto final do **Bootcamp Santander 2026 - Rust AI Developer (DIO)**, construído a partir do [repositório base](https://github.com/digitalinnovationone/rust-fullstack-carteira-investimentos) e evoluído com uma carteira completa por pessoa usuária.
 
 ---
 
@@ -17,7 +17,7 @@ Projeto final do **Bootcamp Santander 2026 — Rust AI Developer (DIO)**, constr
 | **Carteira por usuário** ⭐ | Cada pessoa registra **compras** e **vendas** dos seus ativos. |
 | **Preço médio ponderado** ⭐ | Comprar um ativo que já está na carteira recalcula o preço médio automaticamente (no próprio `UPSERT` do Postgres). |
 | **Vendas seguras** ⭐ | Venda em transação com `SELECT … FOR UPDATE`; não permite vender mais do que se tem e encerra a posição ao zerar. |
-| **Dashboard** ⭐ | Valor de mercado, total investido, lucro/prejuízo (R$ e %), barra de alocação colorida e tabela por ativo — tudo formatado em padrão brasileiro. |
+| **Dashboard** ⭐ | Valor de mercado, total investido, lucro/prejuízo (R$ e %), barra de alocação colorida e tabela por ativo - tudo formatado em padrão brasileiro. |
 | **API de resumo** ⭐ | `GET /api/portfolio` devolve o resumo da carteira da pessoa logada em JSON. |
 
 ⭐ = melhorias implementadas nesta entrega.
@@ -106,22 +106,22 @@ cargo clippy --all-targets -- -D warnings    # lint sem avisos
 cargo fmt --check
 ```
 
-Os testes com `#[sqlx::test]` criam um banco temporário por teste, aplicam as migrations e carregam fixtures — por isso precisam de um PostgreSQL acessível em `DATABASE_URL`.
+Os testes com `#[sqlx::test]` criam um banco temporário por teste, aplicam as migrations e carregam fixtures - por isso precisam de um PostgreSQL acessível em `DATABASE_URL`.
 
 O que é coberto:
 
-- **Cálculos da carteira** — totais, P&L, alocação somando 100%, posições com custo zero
-- **Repositório** — preço médio ponderado, venda parcial/total, venda acima do saldo, posição de outra pessoa
-- **API** — criação, listagem, atualização, validações e nome duplicado (com snapshots `insta`)
-- **Autenticação** — ida e volta do JWT e rejeição de token assinado com outra chave
-- **Páginas** — dashboard com dados, carteira vazia, mensagens de erro no login
-- **Formatação e validação** — moeda, percentual, quantidades, credenciais
+- **Cálculos da carteira** - totais, P&L, alocação somando 100%, posições com custo zero
+- **Repositório** - preço médio ponderado, venda parcial/total, venda acima do saldo, posição de outra pessoa
+- **API** - criação, listagem, atualização, validações e nome duplicado (com snapshots `insta`)
+- **Autenticação** - ida e volta do JWT e rejeição de token assinado com outra chave
+- **Páginas** - dashboard com dados, carteira vazia, mensagens de erro no login
+- **Formatação e validação** - moeda, percentual, quantidades, credenciais
 
 O **GitHub Actions** roda tudo isso a cada push, com um serviço PostgreSQL.
 
 ## 🚀 Melhorias implementadas (em relação ao projeto base)
 
-1. **Carteira por usuário** — nova tabela `positions` (FK para `users` e `assets`, `UNIQUE(user_id, asset_id)` e `CHECK`s de quantidade/preço).
+1. **Carteira por usuário** - nova tabela `positions` (FK para `users` e `assets`, `UNIQUE(user_id, asset_id)` e `CHECK`s de quantidade/preço).
 2. **Compra com preço médio ponderado** calculado atomicamente no `INSERT … ON CONFLICT DO UPDATE`.
 3. **Venda transacional** com bloqueio de linha, tolerância para frações e encerramento automático da posição.
 4. **Dashboard completo** substituindo o antigo `Hello, <usuário>`: cards de resumo, barra de alocação, tabela de posições, formulários de compra/venda e logout.
@@ -141,4 +141,4 @@ O **GitHub Actions** roda tudo isso a cada push, com um serviço PostgreSQL.
 
 ---
 
-Feito com 🦀 durante o Bootcamp Santander 2026 — Rust AI Developer, na [DIO](https://www.dio.me).
+Feito com 🦀 durante o Bootcamp Santander 2026 - Rust AI Developer, na [DIO](https://www.dio.me).

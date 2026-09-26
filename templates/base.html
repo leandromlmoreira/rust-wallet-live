@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="color-scheme" content="light dark">
+    <title>{% block title %}Wallet Live{% endblock %}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        /*
+         * Tokens de tema. Regra de forma: superfícies 12px, controles 8px.
+         * Um único acento (ciano da marca); verde e vermelho só indicam ganho e perda.
+         */
+        :root {
+            --bg: #f4f5f7;
+            --surface: #ffffff;
+            --surface-muted: #eceef2;
+            --border: #dcdfe5;
+            --text: #16181d;
+            --text-muted: #5b616e;
+            --accent: #0e7c8c;
+            --accent-soft: #0e7c8c14;
+            --accent-text: #ffffff;
+            --gain: #0f7a4a;
+            --loss: #b42335;
+            --focus: #0e7c8c55;
+            --radius-surface: 12px;
+            --radius-control: 8px;
+        }
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --bg: #0c0e12;
+                --surface: #14171d;
+                --surface-muted: #1b1f27;
+                --border: #262b35;
+                --text: #e8eaee;
+                --text-muted: #9aa1ad;
+                --accent: #45c4d4;
+                --accent-soft: #45c4d41a;
+                --accent-text: #06181b;
+                --gain: #4cc38a;
+                --loss: #f07083;
+                --focus: #45c4d466;
+            }
+        }
+
+        *, *::before, *::after { box-sizing: border-box; }
+        body {
+            margin: 0;
+            min-height: 100dvh;
+            background: var(--bg);
+            color: var(--text);
+            font-family: "Geist", system-ui, sans-serif;
+            font-size: 15px;
+            line-height: 1.5;
+            -webkit-font-smoothing: antialiased;
+        }
+        h1, h2, p { margin: 0; }
+        .num { font-family: "Geist Mono", ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+        .muted { color: var(--text-muted); }
+        .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+        .gain { color: var(--gain); }
+        .loss { color: var(--loss); }
+        .wrap { max-width: 1120px; margin: 0 auto; padding: 0 20px; }
+        .brand { font-weight: 700; letter-spacing: -0.02em; font-size: 18px; }
+        .brand span { color: var(--accent); }
+
+        .surface {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-surface);
+        }
+
+        .field { display: grid; gap: 6px; font-size: 13px; font-weight: 500; }
+        .input {
+            width: 100%;
+            font: inherit;
+            font-size: 15px;
+            font-weight: 400;
+            padding: 10px 12px;
+            color: var(--text);
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-control);
+        }
+        .input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--focus); }
+        .hint { font-size: 13px; color: var(--text-muted); }
+
+        .btn {
+            font: inherit;
+            font-weight: 600;
+            font-size: 14px;
+            white-space: nowrap;
+            padding: 10px 16px;
+            border-radius: var(--radius-control);
+            border: 1px solid transparent;
+            cursor: pointer;
+            transition: background-color .15s ease, border-color .15s ease, transform .1s ease;
+        }
+        .btn:active { transform: translateY(1px); }
+        .btn:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--focus); }
+        .btn-primary { background: var(--accent); color: var(--accent-text); }
+        .btn-primary:hover { filter: brightness(1.08); }
+        .btn-outline { background: transparent; color: var(--accent); border-color: var(--accent); }
+        .btn-outline:hover { background: var(--accent-soft); }
+        .btn-quiet { background: transparent; color: var(--text-muted); border-color: var(--border); }
+        .btn-quiet:hover { color: var(--text); }
+        .btn-link { background: none; border: 0; padding: 4px; color: var(--text-muted); font-weight: 500; }
+        .btn-link:hover { color: var(--loss); }
+
+        .alert { padding: 12px 14px; border-radius: var(--radius-control); font-size: 14px; border: 1px solid; }
+        .alert-ok { color: var(--gain); border-color: color-mix(in srgb, var(--gain) 35%, transparent); background: color-mix(in srgb, var(--gain) 8%, transparent); }
+        .alert-error { color: var(--loss); border-color: color-mix(in srgb, var(--loss) 35%, transparent); background: color-mix(in srgb, var(--loss) 8%, transparent); }
+
+        @media (prefers-reduced-motion: reduce) {
+            * { transition: none !important; }
+        }
+        {% block style %}{% endblock %}
+    </style>
+</head>
+<body>
+{% block body %}{% endblock %}
+</body>
+</html>

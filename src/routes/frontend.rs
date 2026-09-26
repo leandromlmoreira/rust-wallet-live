@@ -126,9 +126,17 @@ fn flash_for(code: &str) -> Option<Flash> {
     Some(Flash { text, success })
 }
 
-/// Cores da barra de alocação, em ordem.
+/// Tons do acento da marca para a alocação, do maior para o menor ativo.
+/// Um acento só, em intensidades diferentes, funciona nos temas claro e escuro.
 const PALETTE: [&str; 8] = [
-    "#22d3ee", "#a78bfa", "#34d399", "#fbbf24", "#f472b6", "#60a5fa", "#fb923c", "#94a3b8",
+    "var(--accent)",
+    "color-mix(in srgb, var(--accent) 75%, var(--surface))",
+    "color-mix(in srgb, var(--accent) 55%, var(--surface))",
+    "color-mix(in srgb, var(--accent) 40%, var(--surface))",
+    "color-mix(in srgb, var(--accent) 28%, var(--surface))",
+    "color-mix(in srgb, var(--accent) 20%, var(--surface))",
+    "color-mix(in srgb, var(--accent) 14%, var(--surface))",
+    "color-mix(in srgb, var(--accent) 10%, var(--surface))",
 ];
 
 struct HoldingView {
