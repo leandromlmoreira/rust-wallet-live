@@ -1,163 +1,128 @@
-# 🦀 Wallet Live - Carteira de Investimentos Inteligente em Rust
+# Wallet Live
 
-![CI](../../actions/workflows/ci.yml/badge.svg)
+**Carteira de investimentos fullstack em Rust: registre compras e vendas, acompanhe preço médio, lucro realizado e a evolução do patrimônio num painel renderizado no servidor.**
 
-Aplicação **fullstack em Rust** para acompanhar uma carteira de investimentos: API REST, banco PostgreSQL, autenticação com JWT em cookie e dashboard web renderizado no servidor.
+[![CI](https://github.com/leandromlmoreira/rust-wallet-live/actions/workflows/ci.yml/badge.svg)](https://github.com/leandromlmoreira/rust-wallet-live/actions/workflows/ci.yml)
+![Rust 2024](https://img.shields.io/badge/Rust-2024-b7410e)
+![Axum 0.8](https://img.shields.io/badge/Axum-0.8-1f2937)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-SQLx-336791)
 
-Projeto final do **Bootcamp Santander 2026 - Rust AI Developer (DIO)**, construído a partir do [repositório base](https://github.com/digitalinnovationone/rust-fullstack-carteira-investimentos) e evoluído com uma carteira completa por pessoa usuária.
+![Painel do Wallet Live com resumo da carteira, capital investido, alocação e resultado por ativo](docs/preview.png)
 
----
+<table>
+  <tr>
+    <td width="68%"><img src="docs/preview-dark.png" alt="Painel no tema escuro"></td>
+    <td width="32%"><img src="docs/preview-mobile.png" alt="Painel em tela de celular"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Tema escuro automático</sub></td>
+    <td align="center"><sub>Layout em 375 px</sub></td>
+  </tr>
+</table>
 
-## ✨ O que o projeto faz
+<sub>Capturas do app rodando localmente (`cargo run` + PostgreSQL) com uma carteira de demonstração criada pelo próprio formulário de operações.</sub>
 
-| Recurso | Descrição |
+## Funcionalidades
+
+- **Conta própria em um passo**: a conta é criada no primeiro login; senha com hash (`password-auth`) e sessão por JWT em cookie `HttpOnly`, `SameSite=Lax`, válido por 8 horas.
+- **Compras com preço médio ponderado**: calculado de forma atômica no `INSERT … ON CONFLICT DO UPDATE` do PostgreSQL.
+- **Vendas seguras**: transação com `SELECT … FOR UPDATE`, bloqueio de venda acima do saldo e encerramento automático da posição zerada.
+- **Histórico e lucro realizado**: cada operação grava data, preço e preço médio do momento; o lucro de cada venda é `quantidade × (preço de venda − preço médio)`.
+- **Painel analítico**: valor de mercado, total investido, resultado em aberto e realizado, e três gráficos SVG gerados em Rust (capital ao longo do tempo, alocação em rosca e resultado por ativo), com tooltips por mouse e teclado.
+- **Tema claro e escuro** pelo sistema, com paleta categórica validada para daltonismo e cor fixa por ativo.
+- **Exportação CSV** no padrão do Excel em português (`;` e vírgula decimal), protegida contra injeção de fórmulas.
+- **API REST** para ativos, resumo da carteira e histórico, com erros `422` claros em entradas inválidas.
+
+## Arquitetura
+
+```mermaid
+flowchart LR
+    B[Navegador] -- "HTML (Askama) + SVG" --> F[routes/frontend.rs]
+    C[Cliente HTTP] -- JSON --> A[routes/api.rs]
+    F --> X[auth: User via cookie JWT / Admin via header]
+    A --> X
+    F --> P[portfolio.rs<br/>cálculos puros]
+    F --> G[charts.rs<br/>geometria dos gráficos]
+    A --> P
+    F --> R[repository.rs]
+    A --> R
+    R -- "SQLx (queries checadas em compilação)" --> D[(PostgreSQL)]
+```
+
+| Camada | Responsabilidade |
 |---|---|
-| **Login / cadastro** | A conta é criada no primeiro acesso; senhas com hash (`password-auth`) e sessão por JWT em cookie `HttpOnly` + `SameSite=Lax` (8h). |
-| **Catálogo de ativos** | Admin cadastra e atualiza ativos e cotações pela API (`/api/assets`). |
-| **Carteira por usuário** ⭐ | Cada pessoa registra **compras** e **vendas** dos seus ativos. |
-| **Preço médio ponderado** ⭐ | Comprar um ativo que já está na carteira recalcula o preço médio automaticamente (no próprio `UPSERT` do Postgres). |
-| **Vendas seguras** ⭐ | Venda em transação com `SELECT … FOR UPDATE`; não permite vender mais do que se tem e encerra a posição ao zerar. |
-| **Histórico de operações** ⭐ | Cada compra e venda é gravada com data, preço e o preço médio do momento. |
-| **Lucro realizado** ⭐ | Calculado em cada venda: `quantidade x (preço de venda - preço médio)`. |
-| **Painel analítico** ⭐ | Resumo (valor de mercado, investido, resultado em aberto e realizado) e três gráficos em SVG gerados no servidor: capital investido ao longo do tempo, alocação em rosca e resultado por ativo em barras divergentes. Tooltips com mouse e teclado. |
-| **Tema claro e escuro** ⭐ | Automático pelo sistema, com paleta de gráficos validada para daltonismo nos dois temas. |
-| **Exportação CSV** ⭐ | Todas as operações em CSV no padrão do Excel em português (`;` e vírgula decimal), protegido contra injeção de fórmulas. |
-| **API** ⭐ | `GET /api/portfolio` (resumo) e `GET /api/transactions` (histórico, lucro realizado e evolução do capital). |
+| `app.rs` | estado da aplicação, configuração por ambiente, migrations automáticas e servidor |
+| `auth/` | extractors `User` (JWT em cookie) e `Admin` (header `Authorization`) |
+| `routes/frontend.rs` | login, painel, compra, venda, remoção e exportação CSV |
+| `routes/api.rs` | `/api/assets`, `/api/portfolio` e `/api/transactions` |
+| `repository.rs` | acesso ao banco: ativos, usuários, posições e transações |
+| `portfolio.rs` | P&L, alocação, lucro realizado e linha do tempo, sem I/O |
+| `charts.rs` | escalas, linha, rosca e barras divergentes |
+| `format.rs` / `validation.rs` / `dates.rs` | moeda brasileira, regras de entrada e datas em horário de Brasília |
+| `templates/` | `base.html` (tokens de tema), `login.html` e `dashboard.html` |
 
-⭐ = melhorias implementadas nesta entrega.
+A regra de negócio que precisa de atomicidade (preço médio, venda) fica no banco; tudo o que é exibição fica em funções puras, testáveis sem PostgreSQL.
 
-## 🧱 Tecnologias
+### Rotas
 
-- **Rust 2024** · **Axum 0.8** (rotas e extractors)
-- **SQLx 0.8 + PostgreSQL** (queries verificadas em tempo de compilação, migrations, `#[sqlx::test]`)
-- **Askama** (templates HTML compilados) com CSS próprio e gráficos em SVG, sem biblioteca JS
-- **time** (datas das operações)
-- **jwt-simple** (HS256, implementação pure-Rust) · **password-auth** (hash de senha)
-- **insta** (snapshot tests) · **GitHub Actions** (fmt + clippy + testes com Postgres)
+| Método | Rota | Acesso |
+|---|---|---|
+| `GET` | `/` | painel da pessoa logada |
+| `GET` `POST` | `/login` | página e envio do login |
+| `POST` | `/logout` | encerra a sessão |
+| `POST` | `/positions/buy` · `/positions/sell` | registra compra ou venda |
+| `POST` | `/positions/{id}/delete` | remove uma posição própria |
+| `GET` | `/export/operacoes.csv` | exporta o histórico |
+| `GET` | `/api/assets` | lista ativos |
+| `POST` `PATCH` | `/api/assets` | cadastra ou atualiza cotação (admin) |
+| `GET` | `/api/portfolio` · `/api/transactions` | resumo e histórico (sessão) |
 
-## 🗂️ Estrutura
+## Stack
 
-```
-src/
-├── app.rs            # AppState, Config (segredos via ambiente), migrations e servidor
-├── auth/             # Admin (header Authorization) e User (JWT em cookie)
-├── routes/
-│   ├── api.rs        # /api/assets, /api/portfolio e /api/transactions
-│   └── frontend.rs   # login, dashboard, compra/venda/remoção e exportação CSV
-├── repository.rs     # acesso ao banco (assets, users, positions, transactions)
-├── portfolio.rs      # cálculos puros: P&L, alocação, lucro realizado e linha do tempo
-├── charts.rs         # geometria dos gráficos (escalas, linha, rosca e barras)
-├── dates.rs          # datas das operações (horário de Brasília)
-├── validation.rs     # regras de entrada compartilhadas
-├── format.rs         # R$ 1.234,56 · R$ 2,5 mil · +12,34% · quantidades
-└── error.rs          # AppError → respostas HTTP
-templates/            # base.html (tokens de tema), login.html e dashboard.html
-migrations/           # assets, users, positions e transactions
-seeds/assets.sql      # ativos de exemplo
-```
+Rust 2024 · Axum 0.8 · SQLx 0.8 + PostgreSQL · Askama · jwt-simple · password-auth · time · insta · GitHub Actions
 
-## ▶️ Como executar
+## Como rodar
 
-Pré-requisitos: **Rust** (stable) e **PostgreSQL** (local ou via Docker).
+Pré-requisitos: Rust stable e PostgreSQL (local ou Docker).
 
 ```bash
-# 1. Banco de dados (opção Docker)
 docker compose up -d
-
-# 2. Variáveis de ambiente (já existe um .env de desenvolvimento)
-cp .env.example .env   # ajuste JWT_SECRET e ADMIN_KEY em produção
-
-# 3. Rodar (as migrations são aplicadas automaticamente na inicialização)
+cp .env.example .env
 cargo run
-
-# 4. (opcional) ativos de exemplo
 psql postgres://postgres:postgres@localhost:5432/postgres -f seeds/assets.sql
 ```
 
-Acesse **http://127.0.0.1:3000**, escolha um usuário e uma senha (a conta é criada no primeiro acesso) e registre suas compras.
+As migrations rodam na inicialização. Acesse http://127.0.0.1:3000, escolha usuário e senha (a conta nasce no primeiro acesso) e registre as operações.
 
 | Variável | Uso |
 |---|---|
 | `DATABASE_URL` | conexão com o PostgreSQL |
-| `JWT_SECRET` | chave de assinatura dos tokens (mín. 16 caracteres) |
+| `JWT_SECRET` | chave de assinatura dos tokens (mínimo 16 caracteres) |
 | `ADMIN_KEY` | valor esperado no header `Authorization` das rotas de admin |
 | `PORT` | porta HTTP (padrão `3000`) |
 
-### Exemplos de API
+Os valores do `.env` versionado servem só para desenvolvimento; em produção defina segredos próprios.
 
 ```bash
-# Cadastrar um ativo (admin)
 curl -X POST http://127.0.0.1:3000/api/assets \
   -H "Authorization: im-the-admin" -H "Content-Type: application/json" \
   -d '{"name": "PETR4", "unit_value": 38.40}'
 
-# Atualizar a cotação (admin)
-curl -X PATCH http://127.0.0.1:3000/api/assets \
-  -H "Authorization: im-the-admin" -H "Content-Type: application/json" \
-  -d '{"id": 1, "unit_value": 40.10}'
-
-# Listar ativos
-curl http://127.0.0.1:3000/api/assets
-
-# Resumo da minha carteira (usa o cookie de sessão do navegador)
-curl http://127.0.0.1:3000/api/portfolio -H "Cookie: token=<seu-token>"
-
-# Histórico, lucro realizado e evolução do capital investido
 curl http://127.0.0.1:3000/api/transactions -H "Cookie: token=<seu-token>"
 ```
 
-No painel, **Exportar CSV** baixa todas as operações (`/export/operacoes.csv`).
-
-Entradas inválidas (valor ≤ 0, nome vazio ou repetido, quantidade negativa) retornam **422** com uma mensagem clara.
-
-## 🧪 Como testar
+## Qualidade
 
 ```bash
-cargo test                                   # 38 testes (unitários + banco)
-cargo clippy --all-targets -- -D warnings    # lint sem avisos
 cargo fmt --check
+cargo clippy --all-targets -- -D warnings
+cargo test
 ```
 
-Os testes com `#[sqlx::test]` criam um banco temporário por teste, aplicam as migrations e carregam fixtures - por isso precisam de um PostgreSQL acessível em `DATABASE_URL`.
+São 38 testes, entre unitários e de banco (`#[sqlx::test]` cria um banco temporário por teste, aplica as migrations e carrega fixtures). Cobrem cálculos da carteira, geometria dos gráficos, preço médio e vendas parciais, bloqueio de posição alheia, CSV e injeção de fórmulas, validações da API com snapshots `insta`, JWT e renderização das páginas.
 
-O que é coberto:
-
-- **Cálculos da carteira** - totais, P&L, alocação somando 100%, posições com custo zero, lucro realizado e linha do tempo
-- **Gráficos** - escala "redonda" do eixo, linha até hoje, rosca fechando 100% e cores fixas por ativo, barras escaladas
-- **Repositório** - preço médio ponderado, histórico gravado, venda parcial/total, venda acima do saldo, posição de outra pessoa
-- **Exportação** - formato do CSV e bloqueio de fórmulas; datas futuras recusadas
-- **API** - criação, listagem, atualização, validações e nome duplicado (com snapshots `insta`)
-- **Autenticação** - ida e volta do JWT e rejeição de token assinado com outra chave
-- **Páginas** - dashboard com dados, carteira vazia, mensagens de erro no login
-- **Formatação e validação** - moeda, percentual, quantidades, credenciais
-
-O **GitHub Actions** roda tudo isso a cada push, com um serviço PostgreSQL.
-
-## 🚀 Melhorias implementadas (em relação ao projeto base)
-
-1. **Carteira por usuário** - nova tabela `positions` (FK para `users` e `assets`, `UNIQUE(user_id, asset_id)` e `CHECK`s de quantidade/preço).
-2. **Compra com preço médio ponderado** calculado atomicamente no `INSERT … ON CONFLICT DO UPDATE`.
-3. **Venda transacional** com bloqueio de linha, tolerância para frações e encerramento automático da posição.
-4. **Dashboard completo** substituindo o antigo `Hello, <usuário>`: cards de resumo, barra de alocação, tabela de posições, formulários de compra/venda e logout.
-5. **Segurança**: segredos saíram do código para variáveis de ambiente; cookie com `Path`, `SameSite` e expiração; hash corrompido não derruba mais o servidor (antes havia um `panic!`); uma pessoa não consegue apagar a posição de outra.
-6. **Validações e erros amigáveis** na API (422) e nas páginas (mensagens em português).
-7. **Migrations automáticas** na inicialização e `PORT` configurável.
-8. **Histórico e lucro realizado** - nova tabela `transactions`, gravada na mesma transação da compra/venda.
-9. **Painel analítico** com três gráficos SVG gerados em Rust, tooltips acessíveis por teclado e tabela de apoio para cada gráfico.
-10. **Design system próprio**: tokens de tema claro/escuro, paleta categórica validada para daltonismo e cores que seguem o ativo (não o ranking).
-11. **Exportação CSV** pronta para o Excel em português.
-12. **Testes**: de 3 para 38, e **CI** no GitHub Actions (fmt, clippy e testes).
-
-## 📚 O que aprendi
-
-- Como o **sistema de tipos do Rust** ajuda numa API web: extractors do Axum (`User`, `Admin`, `Repository`) transformam autenticação e acesso a dados em parâmetros de função, e o compilador impede rotas sem as dependências certas.
-- O valor do **SQLx com queries checadas em compilação**: um erro de coluna aparece no `cargo build`, não em produção.
-- Deixar a **regra de negócio no lugar certo**: o preço médio no banco (atômico) e os cálculos de exibição em funções puras (`portfolio.rs`), fáceis de testar sem banco.
-- **Transações e concorrência** (`FOR UPDATE`) para evitar vender a mesma posição duas vezes.
-- **Boas práticas de sessão**: JWT em cookie `HttpOnly`/`SameSite`, segredos fora do código e mensagens de erro que não vazam detalhes.
-- **Visualização de dados** com regras claras: um eixo só, escalas redondas, cor pela identidade do ativo e não pela posição no ranking, e texto nunca pintado com a cor da série.
-- Montar uma **esteira de qualidade** (fmt, clippy, testes com banco real no CI).
+O workflow [`ci.yml`](.github/workflows/ci.yml) roda formatação, clippy e testes contra um serviço PostgreSQL a cada push e pull request.
 
 ---
 
-Feito com 🦀 durante o Bootcamp Santander 2026 - Rust AI Developer, na [DIO](https://www.dio.me).
+<sub>Evolução do projeto final do Bootcamp Santander 2026 · Rust AI Developer (DIO), a partir do [repositório base](https://github.com/digitalinnovationone/rust-fullstack-carteira-investimentos).</sub>
